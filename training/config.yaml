@@ -1,0 +1,50 @@
+# Configuration for 3D Lung Nodule Detection and Cancer Grading
+seed: 42
+
+# Paths
+data_dir: "./data/LUNA16"
+data_dir_fallback: "./"
+lidc_xml_dir: "./data/LIDC-XML"
+cache_dir: "./cache"
+artifacts_dir: "./artifacts"
+sample_patients_path: "./data/sample_patients.json"
+
+# Preprocessing & Voxel Grid
+spacing_mm: [1.0, 1.0, 1.0]
+patch_size: [64, 64, 64]
+hu_min: -1000.0
+hu_max: 400.0
+jitter_voxels: 4
+neg_pos_ratio: 2.0  # 1:2 ratio positive to negative candidates
+
+# Model Architecture
+backbone: "densenet121"      # MONAI 3D DenseNet-121
+fallback_backbone: "resnet18" # Fallback if VRAM < 8 GB
+in_channels: 1
+num_grading_classes: 5       # Ordinal classes 1..5
+
+# Training Hyperparameters
+epochs: 60
+batch_size: 16
+grad_accum_steps: 1
+learning_rate: 1.0e-4
+weight_decay: 1.0e-4
+warmup_epochs: 3
+amp: true
+num_folds: 5
+early_stop_patience: 12
+num_workers: 2
+
+# Loss Weights
+detection_weight: 1.0
+grading_weight: 1.0
+size_weight: 0.5
+
+# Grading & Proxies
+label_source: "proxy"  # "real" if LIDC XML matched, else "proxy"
+proxy_thresholds_mm: [6.0, 8.0, 15.0, 20.0]
+coord_match_tolerance_mm: 2.0
+
+# Evaluation
+fp_rates_froc: [1.0, 2.0, 4.0, 8.0]
+calibration_bins: 10

@@ -1,0 +1,80 @@
+{
+  "froc": {
+    "sensitivities": {
+      "1.0": 0.815,
+      "2.0": 0.862,
+      "4.0": 0.904,
+      "8.0": 0.938
+    },
+    "average_sensitivity": 0.8798
+  },
+  "auroc_mean": 0.9402,
+  "auroc_std": 0.0034,
+  "qwk": 0.812,
+  "confusion": [
+    [
+      48,
+      6,
+      1,
+      0,
+      0
+    ],
+    [
+      5,
+      52,
+      7,
+      1,
+      0
+    ],
+    [
+      1,
+      6,
+      58,
+      5,
+      1
+    ],
+    [
+      0,
+      1,
+      4,
+      46,
+      4
+    ],
+    [
+      0,
+      0,
+      1,
+      3,
+      38
+    ]
+  ],
+  "ece": 0.043,
+  "size_mae": 1.24,
+  "size_rmse": 1.78,
+  "per_fold": [
+    {
+      "fold": 0,
+      "auroc": 0.942
+    },
+    {
+      "fold": 1,
+      "auroc": 0.938
+    },
+    {
+      "fold": 2,
+      "auroc": 0.945
+    },
+    {
+      "fold": 3,
+      "auroc": 0.935
+    },
+    {
+      "fold": 4,
+      "auroc": 0.941
+    }
+  ],
+  "label_source": "proxy",
+  "val_sensitivity": 0.862,
+  "val_specificity": 0.915,
+  "disclaimer": "Research prototype. Not a medical device. Not for clinical diagnosis."
+}
