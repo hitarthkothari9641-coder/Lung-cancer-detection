@@ -55,7 +55,7 @@ LUNA16 itself includes nodule coordinates and diameters, but **does not** supply
   - `15 – 20 mm` &rarr; **Score 4**
   - `> 20 mm` &rarr; **Score 5**
   
-  Whenever proxy labels are active, a muted `proxy labels` badge is displayed next to every grade chip in the UI, and logged into `artifacts/model_card.md`.
+  The active label source is recorded in `artifacts/metrics.json` and `artifacts/model_card.md` so any reported result states whether it came from real LIDC reads or diameter proxies.
 
 ### Stage (b): Clinical Rule Overlay
 The model's outputs `(malignancy_score, diameter_mm)` pass through the deterministic clinical mapping function in `backend/app/grading.py` (and its exact client-side mirror `frontend/lib/grading.ts`):
@@ -139,50 +139,83 @@ lung-cancer-grader/
 
 ---
 
-## 3. Quick Start & Instant Demo (No Training Required)
+## 3. Quick Start (Windows, one click)
 
-The stack is designed to run **100% offline** without any external API keys or cloud dependencies.
+### `start.bat` — launch the application
+Double-click **`start.bat`** in the project root. It will:
+1. Create a `.venv` Python environment if one does not exist.
+2. Install backend Python packages and frontend npm packages (first run only).
+3. Generate the sample patient cohort if `data/sample_patients.json` is missing.
+4. Start the FastAPI backend on `http://127.0.0.1:8000` and the Next.js UI on `http://localhost:3000`.
+5. Open the browser to the app.
 
-### Step 1: Install Dependencies
+Without trained weights the app runs on the built-in demo cohort, so every screen works immediately.
+
+### `train.bat` — train the model
+Double-click **`train.bat`** to run the complete two-step pipeline:
+
+| Step | Script | What it does |
+|------|--------|--------------|
+| 1 | `training/preprocess.py` | Resamples every `.mhd` in `data/LUNA16` to 1.0 mm isotropic, clips HU to `[-1000, 400]`, and caches normalized `float16` volumes in `./cache/`. |
+| 2 | `training/train.py` | Runs 5-fold cross-validation, saves `artifacts/model.pt` + `artifacts/model_ts.pt`, and writes measured metrics and plots. |
+
+Arguments are forwarded to `train.py`, e.g. `train.bat --epochs 2` or `train.bat --fold 0 --dry-run`.
+
+Both scripts are idempotent — re-running them reuses the existing environment and cache.
+
+### Manual (macOS / Linux)
 ```bash
-# Python backend & training libraries
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r backend/requirements.txt -r training/requirements.txt
-
-# Node frontend dependencies
 cd frontend && npm install && cd ..
-```
 
-### Step 2: Run Backend & Frontend (Instant Demo)
-```bash
-# Launch FastAPI backend (Mock predictor active if weights not trained)
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
-```
+python training/preprocess.py     # step 1
+python training/train.py          # step 2
 
-In a separate terminal:
-```bash
-# Launch Next.js frontend
-cd frontend
-npm run dev
+uvicorn backend.app.main:app --host 0.0.0.0 --port 8000   # terminal A
+cd frontend && npm run dev                                # terminal B
 ```
-Open **[http://localhost:3000](http://localhost:3000)** in your browser.
+Open **[http://localhost:3000](http://localhost:3000)**.
+
+The browser calls same-origin `/api/*`; `next.config.js` proxies those requests to
+`BACKEND_URL` (default `http://127.0.0.1:8000`), so no CORS setup is required.
 
 ---
 
 ## 4. Training on LUNA16 & Full Evaluation
 
-### 1. Preprocessing & Isotropic Volume Cache
-```bash
-python training/preprocess.py
+### Dataset layout
 ```
-Reads scans from `./data/LUNA16` (or workspace root), resamples voxels to `1.0 x 1.0 x 1.0 mm`, clips HU values to `[-1000, 400]`, and writes normalized `float16 .npy` arrays to `./cache/`.
+data/LUNA16/
+├── annotations.csv
+├── candidates_V2.csv
+└── subset0/ ... subset9/
+    ├── <seriesuid>.mhd
+    └── <seriesuid>.raw
+```
+Point `data_dir` in `training/config.yaml` at the dataset root. If the CSVs are absent the
+discovered volumes are still used as unlabelled screening candidates; if no volumes exist at
+all, a small synthetic cohort keeps the pipeline runnable for smoke testing.
 
-### 2. Run 5-Fold Cross Validation
+### 1. Preprocessing (Step 1)
+```bash
+python training/preprocess.py --max_scans 50
+```
+
+### 2. 5-Fold Cross Validation (Step 2)
 ```bash
 python training/train.py --config training/config.yaml
 ```
-- Trains 5 folds (`subset_index % 5`) using AdamW ($lr = 10^{-4}$), 3-epoch warmup, and Cosine Annealing.
-- Saves best checkpoint to `artifacts/model.pt` and exports TorchScript to `artifacts/model_ts.pt`.
-- Automatically calls `training/evaluate.py` to write `artifacts/metrics.json` and generate plots.
+- Folds come from `subset_index % 5` when the full subset layout is present, otherwise from a
+  stable per-series hash, so no fold is ever empty.
+- AdamW (`lr = 1e-4`), linear warmup, cosine annealing, AMP on CUDA, and early stopping.
+- Saves the best checkpoint to `artifacts/model.pt` and exports TorchScript to `artifacts/model_ts.pt`.
+- Writes **measured** metrics to `artifacts/metrics.json` plus FROC / reliability / confusion plots.
+
+Useful flags: `--epochs`, `--fold`, `--batch-size`, `--device cpu|cuda`, `--dry-run`.
+
+> On CPU the batch size is automatically capped by `cpu_batch_size` in the config so a
+> training step fits in ordinary laptop RAM.
 
 ### 3. Standalone Evaluation Suite
 ```bash
@@ -198,27 +231,29 @@ Computes:
 ```bash
 python -m pytest backend/tests -v
 ```
-Verifies:
-- 20 spot-checked `(score, size)` pairs between backend and frontend tables.
-- Lung-RADS category boundary conditions.
-- Strict Pydantic API schemas and response contracts.
-- FROC monotonicity and zero-positive edge cases.
 
 ---
 
-## 5. Model Validation Benchmark Performance
+## 5. Reported Performance
 
-| Metric | Target / Benchmark Result | Evaluation Standard |
+All headline numbers are written by `training/train.py` to `artifacts/metrics.json`
+after the run, and each entry carries a `results_source` field:
+
+| Metric | Source | Evaluation standard |
 | :--- | :--- | :--- |
-| **Validation AUROC (Mean &plusmn; Std)** | **0.940 &plusmn; 0.005** | 5-Fold Cross Validation |
-| **FROC Sensitivity @ 1.0 FP/scan** | **0.815 (81.5%)** | LUNA16 Competition Metric |
-| **FROC Sensitivity @ 2.0 FP/scan** | **0.862 (86.2%)** | LUNA16 Competition Metric |
-| **FROC Sensitivity @ 4.0 FP/scan** | **0.904 (90.4%)** | LUNA16 Competition Metric |
-| **FROC Sensitivity @ 8.0 FP/scan** | **0.938 (93.8%)** | LUNA16 Competition Metric |
-| **Average FROC Sensitivity** | **0.880 (88.0%)** | Mean across 1, 2, 4, 8 FP/scan |
-| **Quadratic Weighted Kappa (QWK)** | **0.812** | Ordinal 5-class malignancy agreement |
-| **Expected Calibration Error (ECE)** | **0.043 (4.3%)** | 10-bin reliability diagram |
-| **Nodule Size Regression MAE** | **1.24 mm** | Smooth L1 error on axial diameter |
+| **Validation AUROC (mean &plusmn; std)** | `auroc_mean` / `auroc_std` | 5-fold cross validation |
+| **FROC sensitivity @ 1, 2, 4, 8 FP/scan** | `froc.sensitivities` | LUNA16 competition metric |
+| **Quadratic Weighted Kappa (QWK)** | `qwk` | Ordinal 5-class agreement |
+| **Expected Calibration Error (ECE)** | `ece` | 10-bin reliability diagram |
+| **Size regression MAE / RMSE** | `size_mae` / `size_rmse` | Axial diameter error |
+
+- `results_source: "measured"` — computed from the validation splits of your run.
+- `results_source: "benchmark_reference"` — a reference curve shown only when no fold
+  results exist (for example when running `evaluate.py` on its own). These are **not**
+  your model's results.
+
+Scores from a small or synthetic cohort are not meaningful clinically; use the full
+LUNA16 release for any publishable comparison.
 
 ---
 
@@ -239,17 +274,17 @@ docker-compose up --build
 
 ```
 [ Dashboard ]
-  ├── 4 Metric Cards (Total Scans: 12, Nodules: 10, High-Risk: 41.7%, Confidence: 84%)
-  ├── Horizontal Pure SVG Grade Distribution (Grades 0 to IV)
-  └── Recent Patient Screening Queue (Top 6 patients)
+  ├── 4 summary cards (scans reviewed, scans with a nodule, high-risk %, mean confidence)
+  ├── Grade distribution (Grades 0 to IV)
+  └── Recent scans queue (top 6 patients)
 
 [ Patient Detail / Scan Viewer ]
-  ├── Left: 3D MPR Axial CT Slice with Interactive Grad-CAM Heatmap Toggle
-  └── Right: Grade Chip (proxy labels badge), Malignancy 1..5 Meter, Lung-RADS Protocol
+  ├── Left: axial CT slice with a toggleable lesion highlight
+  └── Right: severity grade, malignancy 1..5 meter, Lung-RADS follow-up guidance
 
 [ Scan Upload ]
-  ├── Drag-and-drop MetaImage (.mhd/.raw) or DICOM volume
-  └── Instant Demo sample loaders for immediate testing
+  ├── Drag-and-drop PNG/JPG image or MetaImage (.mhd/.raw) volume
+  └── Sample scan loaders for immediate testing
 ```
 
 ---

@@ -190,10 +190,12 @@ def build_model(
     in_channels: int = 1,
     num_grading_classes: int = 5,
     backbone: str = "densenet121",
+    pretrained: bool = False,
 ) -> LungNoduleMultiTaskNet:
     """Factory helper to construct the multi-task network."""
     return LungNoduleMultiTaskNet(
         in_channels=in_channels,
         num_grading_classes=num_grading_classes,
         backbone_type=backbone,
+        pretrained=pretrained,
     )

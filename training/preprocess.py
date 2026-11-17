@@ -52,7 +52,7 @@ def read_ct_volume(mhd_path: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
             spacing = np.array(itk_img.GetSpacing(), dtype=np.float32)  # (X, Y, Z)
             return volume.astype(np.float32), origin, spacing
         except Exception as e:
-            pass
+            print(f"[preprocess] SimpleITK could not read {mhd_path} ({e}); using raw fallback.")
 
     # Pure Python / NumPy fallback if SimpleITK fails or is missing
     header = parse_mhd_header(mhd_path)
@@ -151,7 +151,8 @@ def extract_patch(
     y_start, y_end = cy - ry, cy + (ph - ry)
     x_start, x_end = cx - rx, cx + (pw - rx)
 
-    # Target buffer
+    # Target buffer: keep the source precision (float16 stays float16) so a
+    # batch of 64^3 patches does not balloon into hundreds of MB of float64.
     patch = np.full(patch_size, fill_value=pad_value, dtype=volume.dtype)
 
     # Compute valid source and destination slices

@@ -1,11 +1,15 @@
 /**
  * frontend/lib/api.ts
  *
- * Lightweight API wrapper with offline fallback resilience.
- * Runtime must be offline: no external HTTP calls.
+ * Typed client for the FastAPI backend.
+ *
+ * Requests default to same-origin `/api/*`, which `next.config.js` rewrites to
+ * the Python service. That works for local runs, Docker, and hosted previews
+ * without CORS configuration. Set NEXT_PUBLIC_API_URL only to point the browser
+ * at a different host entirely.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
 
 export interface NoduleItem {
   coord: [number, number, number];
@@ -26,6 +30,8 @@ export interface PredictionResult {
   recommendation: string;
   gradcam_slice_png_b64: string;
   label_source: string;
+  has_nodule?: boolean;
+  patient?: Record<string, unknown>;
   disclaimer: string;
 }
 
@@ -71,6 +77,21 @@ export interface HealthInfo {
   disclaimer: string;
 }
 
+async function request(path: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(`${API_BASE}${path}`, init);
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      if (body?.detail) detail = String(body.detail);
+    } catch {
+      /* response had no JSON body */
+    }
+    throw new Error(detail || `Request failed (${res.status})`);
+  }
+  return res;
+}
+
 export async function fetchHealth(): Promise<HealthInfo> {
   try {
     const res = await fetch(`${API_BASE}/api/health`, { cache: 'no-store' });
@@ -78,7 +99,7 @@ export async function fetchHealth(): Promise<HealthInfo> {
     return await res.json();
   } catch {
     return {
-      status: 'offline-mock',
+      status: 'unavailable',
       model_loaded: false,
       label_source: 'proxy',
       disclaimer: 'Research prototype. Not a medical device. Not for clinical diagnosis.',
@@ -87,36 +108,32 @@ export async function fetchHealth(): Promise<HealthInfo> {
 }
 
 export async function fetchPatients(): Promise<Patient[]> {
-  const res = await fetch(`${API_BASE}/api/patients`, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`Failed to load patients: ${res.statusText}`);
-  return await res.json();
+  const res = await request('/api/patients', { cache: 'no-store' });
+  return res.json();
 }
 
 export async function fetchStats(): Promise<AggregateStats> {
-  const res = await fetch(`${API_BASE}/api/stats`, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`Failed to load statistics: ${res.statusText}`);
-  return await res.json();
+  const res = await request('/api/stats', { cache: 'no-store' });
+  return res.json();
 }
 
-export async function predictScan(seriesuid: string, patientMeta?: Record<string, any>): Promise<PredictionResult> {
-  const res = await fetch(`${API_BASE}/api/predict`, {
+export async function predictScan(
+  seriesuid: string,
+  patientMeta?: Record<string, unknown>,
+): Promise<PredictionResult> {
+  const res = await request('/api/predict', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ seriesuid, patient: patientMeta }),
   });
-  if (!res.ok) throw new Error(`Prediction failed: ${res.statusText}`);
-  return await res.json();
+  return res.json();
 }
 
 export async function uploadScanFile(formData: FormData): Promise<PredictionResult> {
-  const res = await fetch(`${API_BASE}/api/upload`, {
-    method: 'POST',
-    body: formData,
-  });
-  if (!res.ok) throw new Error(`File upload inference failed: ${res.statusText}`);
-  return await res.json();
+  const res = await request('/api/upload', { method: 'POST', body: formData });
+  return res.json();
 }
 
 export function getReportDownloadUrl(patientId: string): string {
-  return `${API_BASE}/api/report/${patientId}`;
+  return `${API_BASE}/api/report/${encodeURIComponent(patientId)}`;
 }

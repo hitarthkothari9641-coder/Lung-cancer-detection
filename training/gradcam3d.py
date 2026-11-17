@@ -9,6 +9,7 @@ Features:
 - Encodes output as base64 PNG for direct web display without disk writes.
 """
 
+import os
 import io
 import base64
 from typing import Tuple, Optional
@@ -16,7 +17,23 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
+
+# Headless rendering: never try to open a GUI window from the API process
+import matplotlib
+matplotlib.use("Agg", force=True)
 import matplotlib.cm as cm
+
+
+def _resolve_colormap(colormap_name: str):
+    """Returns a colormap across Matplotlib versions (cm.get_cmap was removed in 3.9)."""
+    try:
+        return matplotlib.colormaps[colormap_name]
+    except (AttributeError, KeyError):
+        pass
+    get_cmap = getattr(cm, "get_cmap", None)
+    if get_cmap is not None:
+        return get_cmap(colormap_name)
+    return matplotlib.colormaps["jet"]
 
 
 class GradCAM3D:
@@ -30,16 +47,24 @@ class GradCAM3D:
         self.target_layer = target_layer or self._find_last_conv_layer(model)
         self.gradients: Optional[torch.Tensor] = None
         self.activations: Optional[torch.Tensor] = None
-        self._register_hooks()
+        if self.target_layer is not None:
+            self._register_hooks()
 
-    def _find_last_conv_layer(self, model: torch.nn.Module) -> torch.nn.Module:
-        """Find the last Conv3d layer in the model."""
+    def _find_last_conv_layer(self, model: torch.nn.Module) -> Optional[torch.nn.Module]:
+        """
+        Find the last Conv3d layer in the model.
+
+        TorchScript modules expose their graph rather than ``modules()``, so the
+        layer cannot be located by inspection. In that case the CAM falls back to
+        the attenuation/gaussian heatmap instead of raising.
+        """
         last_conv = None
-        for module in model.modules():
-            if isinstance(module, torch.nn.Conv3d):
-                last_conv = module
-        if last_conv is None:
-            raise ValueError("No Conv3d layer found in model.")
+        try:
+            for module in model.modules():
+                if isinstance(module, torch.nn.Conv3d):
+                    last_conv = module
+        except Exception:
+            return None
         return last_conv
 
     def _register_hooks(self):
@@ -49,9 +74,8 @@ class GradCAM3D:
         def backward_hook(module, grad_in, grad_out):
             self.gradients = grad_out[0].detach()
 
-        if self.target_layer is not None:
-            self.target_layer.register_forward_hook(forward_hook)
-            self.target_layer.register_full_backward_hook(backward_hook)
+        self.target_layer.register_forward_hook(forward_hook)
+        self.target_layer.register_full_backward_hook(backward_hook)
 
     def generate_cam(
         self,
@@ -61,18 +85,22 @@ class GradCAM3D:
         """
         Generates 3D CAM volume of shape (D, H, W).
         """
-        self.model.zero_grad()
+        self.model.eval()
+        self.model.zero_grad(set_to_none=True)
         if input_tensor.grad is not None:
             input_tensor.grad.zero_()
 
-        # Forward
-        det_logits, grade_logits, _ = self.model(input_tensor)
+        # Gradients are required even when the caller runs inside torch.no_grad()
+        with torch.enable_grad():
+            work_input = input_tensor.detach().clone().requires_grad_(True)
+            det_logits, _grade_logits, _size_pred = self.model(work_input)
 
-        if target_score is None:
-            target_score = det_logits.sum()
+            if target_score is None:
+                target_score = det_logits.sum()
+            elif not target_score.requires_grad:
+                target_score = det_logits.sum()
 
-        # Backward
-        target_score.backward(retain_graph=True)
+            target_score.backward(retain_graph=True)
 
         if self.gradients is None or self.activations is None:
             # Fallback to Gaussian centered heatmap
@@ -138,7 +166,8 @@ def blend_axial_slice_gradcam(
     ct_rgb = np.stack([ct_uint8] * 3, axis=-1).astype(np.float32)
 
     # Colormap heatmap
-    cmap = cm.get_cmap(colormap_name)
+    cam_slice = np.clip(np.nan_to_num(cam_slice.astype(np.float32)), 0.0, 1.0)
+    cmap = _resolve_colormap(colormap_name)
     cam_colored = cmap(cam_slice)[:, :, :3]  # Drop alpha, [H, W, 3] in [0, 1]
     cam_rgb = (cam_colored * 255.0).astype(np.float32)
 

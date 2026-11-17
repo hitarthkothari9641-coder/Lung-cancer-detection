@@ -8,6 +8,20 @@ from typing import Dict, Any, Optional
 
 from app.schemas import StatsResponse
 
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+def resolve_data_file(data_dir: str, filename: str) -> Optional[str]:
+    """Locates a data file relative to the configured dir, backend, or project root."""
+    candidates = [
+        os.path.join(data_dir, filename),
+        os.path.join(PROJECT_ROOT, data_dir, filename),
+        os.path.join(os.path.dirname(__file__), "..", "..", "data", filename),
+        os.path.join(os.getcwd(), "data", filename),
+        os.path.join(PROJECT_ROOT, "data", filename),
+    ]
+    return next((p for p in candidates if os.path.exists(p)), None)
+
 
 def compute_aggregate_stats(
     patients_file_path: str = "./data/sample_patients.json",
@@ -17,12 +31,9 @@ def compute_aggregate_stats(
     Computes cohort aggregation statistics and merges model validation metrics.
     """
     # Look for patients JSON
-    patient_paths = [
-        patients_file_path,
-        os.path.join(os.path.dirname(__file__), "..", "..", "data", "sample_patients.json"),
-        "./data/sample_patients.json",
-    ]
-    patients_data = []
+    resolved = resolve_data_file("./data", "sample_patients.json")
+    patient_paths = [p for p in [patients_file_path, resolved] if p]
+    patients_data: list = []
     for p in patient_paths:
         if os.path.exists(p):
             try:

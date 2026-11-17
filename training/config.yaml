@@ -18,8 +18,8 @@ jitter_voxels: 4
 neg_pos_ratio: 2.0  # 1:2 ratio positive to negative candidates
 
 # Model Architecture
-backbone: "densenet121"      # MONAI 3D DenseNet-121
-fallback_backbone: "resnet18" # Fallback if VRAM < 8 GB
+backbone: "densenet121"      # MONAI 3D DenseNet-121 (use "native" for CPU-only runs)
+cpu_batch_size: 2            # Automatically applied when training on CPU
 in_channels: 1
 num_grading_classes: 5       # Ordinal classes 1..5
 
@@ -33,7 +33,7 @@ warmup_epochs: 3
 amp: true
 num_folds: 5
 early_stop_patience: 12
-num_workers: 2
+num_workers: 0
 
 # Loss Weights
 detection_weight: 1.0

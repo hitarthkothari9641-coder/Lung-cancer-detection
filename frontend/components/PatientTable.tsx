@@ -7,7 +7,6 @@ import GradeChip from './GradeChip';
 
 interface PatientTableProps {
   patients: Patient[];
-  labelSource?: string;
   limit?: number;
   showSearch?: boolean;
 }
@@ -16,7 +15,6 @@ type SortField = 'name' | 'age' | 'smoking_pack_years' | 'nodule_size_mm' | 'mod
 
 export default function PatientTable({
   patients,
-  labelSource = 'proxy',
   limit,
   showSearch = true,
 }: PatientTableProps) {
@@ -160,7 +158,7 @@ export default function PatientTable({
                     {p.nodule_size_mm > 0 ? `${p.nodule_size_mm.toFixed(1)} mm` : 'None'}
                   </td>
                   <td className="py-3.5 px-4">
-                    <GradeChip grade={p.model_grade} labelSource={labelSource} />
+                    <GradeChip grade={p.model_grade} />
                   </td>
                   <td className="py-3.5 px-4 text-gray-700 font-medium">
                     {p.lung_rads}

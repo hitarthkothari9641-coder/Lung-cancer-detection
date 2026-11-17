@@ -7,11 +7,11 @@ interface GradeDistributionProps {
 }
 
 const GRADE_METADATA = [
-  { key: '0', label: 'Grade 0 (No Nodule)', color: '#94A3B8', bgClass: 'bg-slate-400' },
-  { key: 'I', label: 'Grade I (Benign / Very Low)', color: '#10B981', bgClass: 'bg-emerald-500' },
-  { key: 'II', label: 'Grade II (Probably Benign)', color: '#F59E0B', bgClass: 'bg-amber-500' },
-  { key: 'III', label: 'Grade III (Suspicious)', color: '#F97316', bgClass: 'bg-orange-500' },
-  { key: 'IV', label: 'Grade IV (Highly Suspicious)', color: '#F43F5E', bgClass: 'bg-rose-500' },
+  { key: '0', label: 'No nodule', color: '#94A3B8' },
+  { key: 'I', label: 'Grade I · benign', color: '#10B981' },
+  { key: 'II', label: 'Grade II · probably benign', color: '#F59E0B' },
+  { key: 'III', label: 'Grade III · suspicious', color: '#F97316' },
+  { key: 'IV', label: 'Grade IV · highly suspicious', color: '#F43F5E' },
 ];
 
 export default function GradeDistribution({

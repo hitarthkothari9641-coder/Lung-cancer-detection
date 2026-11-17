@@ -46,6 +46,8 @@ class PredictResponse(BaseModel):
     recommendation: str
     gradcam_slice_png_b64: str
     label_source: str = Field("proxy", description="'real' or 'proxy'")
+    has_nodule: bool = Field(True, description="True when a focal nodule was identified")
+    patient: Optional[Dict[str, Any]] = Field(default=None, description="Echoed patient metadata")
     disclaimer: str = Field("Research prototype. Not a medical device. Not for clinical diagnosis.")
 
 
