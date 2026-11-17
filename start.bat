@@ -96,9 +96,9 @@ if not exist "data\sample_patients.json" (
 REM ---------- 6. Start the services ----------
 echo [5/5] Starting backend and frontend ...
 echo.
-start "Lung Nodule Screening - Backend" cmd /k ""%PY%" -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000"
+start "Lung Nodule Screening - Backend" /D "%CD%" cmd /k ".venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000"
 timeout /t 4 /nobreak >nul
-start "Lung Nodule Screening - Frontend" cmd /k "cd /d "%CD%\frontend" && npm run dev"
+start "Lung Nodule Screening - Frontend" /D "%CD%\frontend" cmd /k "npm run dev"
 timeout /t 8 /nobreak >nul
 start "" "http://localhost:3000"
 
