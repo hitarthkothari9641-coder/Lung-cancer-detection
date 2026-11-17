@@ -13,6 +13,10 @@ import sys
 from typing import Dict, Any, Optional
 import torch
 
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 from app.schemas import PredictResponse
 from app.mock_predictor import MockPredictor
 from app.grading import malignancy_to_grade, GRADE_ROMAN_MAP

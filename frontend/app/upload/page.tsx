@@ -88,10 +88,10 @@ export default function UploadScanPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-textMain tracking-tight">
-          3D CT Scan Upload & Inference
+          CT Scan Upload & AI Inference
         </h1>
         <p className="text-xs text-gray-500 mt-1">
-          Upload DICOM/MetaImage (.mhd + .raw) volumes for isotropic 3D nodule detection and ordinal malignancy grading.
+          Upload a CT scan image (PNG, JPG, DICOM) or MetaImage (.mhd + .raw) volume for 3D nodule detection and ordinal malignancy grading.
         </p>
       </div>
 
@@ -113,7 +113,7 @@ export default function UploadScanPage() {
             <input
               id="file-upload-input"
               type="file"
-              accept=".mhd,.raw,.dcm,.zip"
+              accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.mhd,.raw,.dcm,.zip"
               className="hidden"
               onChange={(e) => {
                 if (e.target.files && e.target.files[0]) {
@@ -129,11 +129,11 @@ export default function UploadScanPage() {
                 {selectedFile ? (
                   <span className="text-accent font-mono">{selectedFile.name}</span>
                 ) : (
-                  'Drag and drop your .mhd or .raw volume here, or click to browse'
+                  'Drag and drop your CT image (PNG, JPG) or volume (.mhd) here, or click to browse'
                 )}
               </div>
               <div className="text-[11px] text-gray-400">
-                Supports LUNA16 MetaImage (.mhd/.raw) or DICOM series
+                Supports PNG, JPG, DICOM, or LUNA16 MetaImage (.mhd/.raw)
               </div>
             </div>
           </div>

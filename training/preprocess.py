@@ -211,3 +211,42 @@ def preprocess_series(
         json.dump(meta, f, indent=2)
 
     return out_npy
+
+
+def preprocess_all(
+    data_dir: str = "./data/LUNA16",
+    fallback_dir: str = "./",
+    cache_dir: str = "./cache",
+    max_scans: Optional[int] = None,
+):
+    """Batch preprocessor to build isotropic volume cache for training epochs."""
+    from dataset import find_luna_files
+
+    series_map = find_luna_files(data_dir, fallback_dir)
+    print(f"Discovered {len(series_map)} scans for preprocessing cache...")
+    keys = list(series_map.keys())
+    if max_scans:
+        keys = keys[:max_scans]
+    for idx, suid in enumerate(keys):
+        mhd = series_map[suid]["mhd_path"]
+        print(f"[{idx+1}/{len(keys)}] Preprocessing {suid}...")
+        preprocess_series(mhd, cache_dir=cache_dir)
+    print("Preprocessing completed.")
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Preprocess LUNA16 scans to isotropic float16 cache")
+    parser.add_argument("--data_dir", default="./data/LUNA16")
+    parser.add_argument("--fallback_dir", default="./")
+    parser.add_argument("--cache_dir", default="./cache")
+    parser.add_argument("--max_scans", type=int, default=None)
+    args = parser.parse_args()
+
+    preprocess_all(
+        data_dir=args.data_dir,
+        fallback_dir=args.fallback_dir,
+        cache_dir=args.cache_dir,
+        max_scans=args.max_scans,
+    )

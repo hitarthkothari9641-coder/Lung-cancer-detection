@@ -155,18 +155,20 @@ class MultiTaskLoss(nn.Module):
         pw = self.pos_weight.to(device) if self.pos_weight is not None else None
 
         # 1. Detection loss
+        det_flat = det_logits.view(-1)
+        det_targets_flat = det_targets.view(-1).float()
         loss_det = F.binary_cross_entropy_with_logits(
-            det_logits.squeeze(-1), det_targets.float(), pos_weight=pw
+            det_flat, det_targets_flat, pos_weight=pw
         )
 
         # Mask for true positive candidates
-        pos_mask = (det_targets > 0.5).bool()
+        pos_mask = (det_targets_flat > 0.5)
 
         # 2. Grading loss on positives
         if pos_mask.sum() > 0:
-            loss_grade = self.coral_loss(grade_logits[pos_mask], grade_targets[pos_mask])
+            loss_grade = self.coral_loss(grade_logits[pos_mask], grade_targets.view(-1)[pos_mask])
             loss_size = F.smooth_l1_loss(
-                size_pred.squeeze(-1)[pos_mask], size_targets[pos_mask].float()
+                size_pred.view(-1)[pos_mask], size_targets.view(-1)[pos_mask].float()
             )
         else:
             loss_grade = torch.tensor(0.0, device=device, requires_grad=True)

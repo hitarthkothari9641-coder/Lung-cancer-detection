@@ -14,11 +14,19 @@ Features:
 
 import os
 import sys
+
+# Ensure training directory and project root are in sys.path
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 import math
 import yaml
 import random
 import argparse
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
@@ -150,7 +158,7 @@ def train_single_fold(
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, epochs - warmup_epochs))
-    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+    scaler = torch.amp.GradScaler(device=device.type, enabled=use_amp)
 
     best_val_auroc = 0.5
     patience = cfg.get("early_stop_patience", 12)
@@ -169,7 +177,7 @@ def train_single_fold(
             grade_targets = batch["grade_target"].to(device)
             size_targets = batch["size_target"].to(device)
 
-            with torch.cuda.amp.autocast(enabled=use_amp):
+            with torch.amp.autocast(device_type=device.type, enabled=use_amp):
                 det_logits, grade_logits, size_pred = model(patches)
                 loss, loss_dict = criterion(
                     det_logits, grade_logits, size_pred,
@@ -233,6 +241,9 @@ def train_single_fold(
             writer.add_scalar(f"Metrics/Val_AUROC_Fold{fold_idx}", val_auroc, epoch)
             writer.add_scalar(f"Metrics/Val_QWK_Fold{fold_idx}", val_qwk, epoch)
             writer.add_scalar(f"Metrics/Val_SizeMAE_Fold{fold_idx}", val_mae, epoch)
+
+        avg_train_loss = train_loss / max(1, len(train_loader))
+        print(f"  Epoch {epoch}/{epochs} | Loss: {avg_train_loss:.4f} | Val AUROC: {val_auroc:.4f} | Val QWK: {val_qwk:.3f} | Size MAE: {val_mae:.2f} mm")
 
         if val_auroc > best_val_auroc:
             best_val_auroc = val_auroc

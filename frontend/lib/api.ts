@@ -66,7 +66,7 @@ export interface AggregateStats {
 
 export interface HealthInfo {
   status: string;
-  model_loaded: bool;
+  model_loaded: boolean;
   label_source: string;
   disclaimer: string;
 }

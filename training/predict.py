@@ -19,8 +19,13 @@ import numpy as np
 import torch
 from scipy import ndimage
 
-# Ensure backend modules can be imported
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend")))
+# Ensure training, backend, and project root can be imported
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend")
+for p in (SCRIPT_DIR, PROJECT_ROOT, BACKEND_DIR):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 from app.grading import malignancy_to_grade, GRADE_ROMAN_MAP
 from preprocess import read_ct_volume, resample_to_isotropic, normalize_hu, extract_patch

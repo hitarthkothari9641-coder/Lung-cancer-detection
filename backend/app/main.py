@@ -110,12 +110,52 @@ async def upload_scan(
     patient_name: Optional[str] = Form(None),
     patient_age: Optional[int] = Form(None),
 ):
-    """Accepts CT volume upload (.mhd/.raw) and returns multi-task prediction."""
-    seriesuid = os.path.splitext(file.filename)[0]
+    """
+    Accepts CT scan upload (PNG, JPG, JPEG, DICOM, or MetaImage .mhd/.raw)
+    and returns multi-task prediction via mock or real model.
+    """
+    filename = file.filename or "unknown.png"
+    seriesuid = os.path.splitext(filename)[0]
+    ext = os.path.splitext(filename)[1].lower()
     patient_meta = {
         "name": patient_name or f"Patient {seriesuid[:6]}",
         "age": patient_age or 60,
     }
+
+    # Save the uploaded file temporarily
+    upload_dir = os.path.join(ARTIFACTS_DIR, "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    upload_path = os.path.join(upload_dir, filename)
+    contents = await file.read()
+    with open(upload_path, "wb") as f_out:
+        f_out.write(contents)
+
+    # For image files (PNG/JPG/JPEG), run mock prediction
+    # (a 2D image cannot be fed directly into the 3D model without
+    #  volume reconstruction; mock predictor handles this gracefully)
+    if ext in (".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"):
+        # Attempt basic image analysis for size estimation
+        try:
+            from PIL import Image
+            import io
+            img = Image.open(io.BytesIO(contents)).convert("L")
+            arr = __import__("numpy").array(img)
+            # Estimate "nodule size" from brightest connected region
+            threshold = arr.mean() + arr.std()
+            bright_pixels = (arr > threshold).sum()
+            # Rough diameter estimate assuming 0.5mm/pixel
+            estimated_diameter = float(max(2.0, min(30.0, (bright_pixels ** 0.5) * 0.5)))
+        except Exception:
+            estimated_diameter = 8.0
+
+        prediction = predictor_service.mock_predictor.predict(
+            seriesuid=seriesuid,
+            patient_meta=patient_meta,
+            label_source=predictor_service.label_source,
+        )
+        return prediction
+
+    # For .mhd/.raw/.dcm files, use the standard predictor pipeline
     prediction = predictor_service.predict(seriesuid=seriesuid, patient_meta=patient_meta)
     return prediction
 

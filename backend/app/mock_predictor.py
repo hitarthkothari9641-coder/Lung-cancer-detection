@@ -6,9 +6,14 @@ Strictly preserves consistency with sample_patients.json and backend/app/grading
 """
 
 import os
+import sys
 import json
 import hashlib
 from typing import Dict, Any, Optional
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from app.grading import malignancy_to_grade, GRADE_ROMAN_MAP
 from training.gradcam3d import generate_mock_ct_gradcam_slice
